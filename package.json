@@ -4,10 +4,11 @@
   "description": "",
   "main": "index.ts",
   "dependencies": {
-    "typescript": "^3.8.3"
+    "typescript": "^3.8.3",
   },
   "devDependencies": {
     "@types/node": "^13.13.5",
+    "prettier": "^2.0.5",
     "ts-node": "^8.10.1"
   },
   "scripts": {

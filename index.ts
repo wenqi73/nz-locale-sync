@@ -1,27 +1,20 @@
-import * as ts from 'typescript';
-import * as fs from 'fs';
-import * as path from 'path';
-
-// export interface Node extends ts.Node {
-//     importClause?: ts.ImportClause;
-//     moduleSpecifier?: ts.Expression;
-// }
-
 // https://github.com/Microsoft/TypeScript/issues/7580#issuecomment-198552002
-interface Replacement {
-    pos: number;
-    end: number;
-    replacementText: string;
-}
-
-interface VariableInfo {
-    [key: string]: { initializer: any; pos: number; end: number };
-}
 
 const importReflect = {
+    // ant-design path
     basePath: `${__dirname}/../ant-design/`,
+
+    // ant-design i18n path
     localePath: 'components/locale/',
+
+    // ant-design i18n file extension
     extension: '.tsx',
+
+    /**
+     * third package, such as following line
+     * in ant-design/components/locale/default.tsx
+     * `import Pagination from 'rc-pagination/lib/locale`/en_US';
+     */
     thirdPackage: {
         Pagination: {
             extension: '.js'
@@ -30,45 +23,67 @@ const importReflect = {
             extension: '.js'
         }
     },
-    dest: {
-        path: 'ng-zorro-antd/i18n/',
-        extension: '.json'
-    }
 
-    // DatePicker: '../date-picker/locale/',
-    // TimePicker: '../time-picker/locale/',
-    // Calendar: '../calendar/locale/',
+    // target path
+    dest: {
+        path: `${__dirname}/../ng-zorro-antd/components/i18n/languages`,
+        extension: '.ts'
+    }
 };
 
-// const files = fs.readdirSync(importReflect.basePath + importReflect.localePath).map(file => path.resolve(importReflect.basePath, importReflect.localePath, file));
+import * as ts from 'typescript';
+import * as fs from 'fs';
+import * as path from 'path';
 
-const files = [path.resolve(importReflect.basePath, importReflect.localePath, 'en_US.tsx')];
+interface Replacement {
+    pos: number;
+    end: number;
+    replacementText: string;
+}
 
-const program = ts.createProgram({
-    rootNames: files,
-    options: {
-        target: ts.ScriptTarget.ES2019,
-        module: ts.ModuleKind.CommonJS
-    }
-});
+interface VariableInfo {
+    [key: string]: { node: ts.Node };
+}
 
-for (const file of program.getSourceFiles()) {
-    if (!file.isDeclarationFile) {
-        const newText = getExportDefaultRecursively(file);
-        const destPath = path.resolve(
-            importReflect.dest.path,
-            path.basename(file.fileName, importReflect.extension) + importReflect.dest.extension
-        );
+interface ImportInfo {
+    [key: string]: string;
+}
 
-        const jsonText = JSON.stringify(eval('(' + newText + ')'), null, 2);
-        fs.writeFileSync(destPath, jsonText);
+function main() {
+    const files = fs
+        .readdirSync(importReflect.basePath + importReflect.localePath)
+        .map(file => path.resolve(importReflect.basePath, importReflect.localePath, file));
+    // const files = [path.resolve(importReflect.basePath, importReflect.localePath, 'hy_AM.tsx')];
+
+    const program = ts.createProgram({
+        rootNames: files,
+        options: {
+            target: ts.ScriptTarget.ES2019,
+            module: ts.ModuleKind.CommonJS
+        }
+    });
+
+    for (const file of program.getSourceFiles()) {
+        if (!file.isDeclarationFile) {
+            const newText = getFileExportDefaultText(file);
+            const destPath = path.resolve(
+                importReflect.dest.path,
+                path.basename(file.fileName, importReflect.extension) + importReflect.dest.extension
+            );
+
+            const jsonText = 'export default ' + JSON.stringify(eval('(' + newText + ')'), null, 2);
+            fs.writeFileSync(destPath, jsonText);
+            console.log('\x1b[32m%s\x1b[0m', `Generate ${destPath}`); //cyan
+        }
     }
 }
 
-function getExportDefaultRecursively(file: ts.SourceFile): string {
+main();
+
+function getFileExportDefaultText(file: ts.SourceFile): string {
     const replacementObj = getExportDefaultText(file);
     const { exportStart, exportEnd, replaceInputs } = replacementObj;
-    return getNewExportText(file, exportStart, exportEnd, replaceInputs);
+    return getReplacedExportText(file, exportStart, exportEnd, replaceInputs);
 }
 
 /**
@@ -93,21 +108,21 @@ function getExportDefaultRecursively(file: ts.SourceFile): string {
  */
 function getExportDefaultText(file: ts.SourceFile): any {
     const replaceInputs: Replacement[] = [];
-    let exportDefaultName: string = '';
     const variableObj: VariableInfo = {};
     const exportObj: VariableInfo = {};
-    const importObj: any = {};
+    const importObj: ImportInfo = {};
+    let exportDefaultName: string = '';
     let exportStart: number = 0;
     let exportEnd: number = 0;
 
     for (const statement of file.statements) {
-        if (statement.kind === ts.SyntaxKind.ImportDeclaration) {
+        if (ts.isImportDeclaration(statement)) {
             let importClause = (statement as ts.ImportDeclaration).importClause;
             let importName: string[] = [];
 
             // import <-A-> from 'B';
             if (importClause?.name) {
-                importName = [importClause?.name?.text];
+                importName = [importClause?.name.getText(file)];
 
                 // import <-{ A, C }-> from 'B';
             } else if (importClause?.namedBindings) {
@@ -117,105 +132,74 @@ function getExportDefaultText(file: ts.SourceFile): any {
 
             // import A from '<-B->';
             const moduleSpecifier: string = ((statement as ts.ImportDeclaration).moduleSpecifier as any).text;
-
             importName.forEach(name => (importObj[name] = moduleSpecifier));
 
             continue;
         }
 
         if (statement.kind === ts.SyntaxKind.ExportAssignment) {
-            // @ts-ignore
-            exportDefaultName = (statement as ts.ExportAssignment).expression.text;
-            Object.assign(exportObj, {
-                [exportDefaultName]: {
-                    initializer: (statement as ts.ExportAssignment).expression,
-                    pos: (statement as ts.ExportAssignment).expression.pos,
-                    end: (statement as ts.ExportAssignment).expression.end
-                }
-            });
-        }
-
-        // "exports.default = name" in .js file
-        // @ts-ignore
-        // @ts-ignore
-        if (
-            statement.kind === ts.SyntaxKind.ExpressionStatement &&
-            // @ts-ignore
-            statement.expression.left?.expression.text === 'exports' &&
-            // @ts-ignore
-            statement.expression.left?.name.text === 'default' &&
-            // @ts-ignore
-            statement.expression.right.text
-        ) {
-            // @ts-ignore
-            exportDefaultName = statement.expression.right.text;
-            let obj = {
-                [exportDefaultName]: {
-                    // @ts-ignore
-                    initializer: statement.expression.right,
-                    // @ts-ignore
-                    pos: (statement as ts.ExportAssignment).expression.right.pos,
-                    // @ts-ignore
-                    end: (statement as ts.ExportAssignment).expression.right.end
-                }
+            exportDefaultName = (statement as ts.ExportAssignment).expression.getText(file);
+            exportObj[exportDefaultName] = {
+                node: (statement as ts.ExportAssignment).expression
             };
-            while (variableObj[exportDefaultName]) {
-                if (variableObj[exportDefaultName].initializer.text) {
-                    exportDefaultName = variableObj[exportDefaultName].initializer.text;
-                    obj = {
-                        [exportDefaultName]: variableObj[exportDefaultName]
-                    };
-                } else {
-                    break;
-                }
-            }
-
-            Object.assign(exportObj, obj);
         }
 
+        // const a = 'a';
         if (statement.kind === ts.SyntaxKind.VariableStatement) {
             const initializer: ts.Expression = (statement as ts.VariableStatement).declarationList.declarations[0].initializer!;
-            // @ts-ignore
-            const name: string = (statement as ts.VariableStatement).declarationList.declarations[0].name.text;
-            Object.assign(variableObj, {
-                [name]: {
-                    initializer: initializer,
-                    pos: initializer.pos,
-                    end: initializer.end
+            const variableName = (statement as ts.VariableStatement).declarationList.declarations[0].name.getText(file);
+            variableObj[variableName] = { node: initializer };
+        }
+
+        // export default a
+        if (ts.isExpressionStatement(statement) && getExportsDefaultExpression(statement.expression)) {
+            const exportDefaultExpression = getExportsDefaultExpression(statement.expression);
+            exportDefaultName = exportDefaultExpression!.getText(file);
+            let result = {
+                [exportDefaultName]: {
+                    node: exportDefaultExpression
                 }
-            });
+            };
+
+            /**
+             * find variable, make sure value is real value. e.g.
+             * var local = {};
+             * var _default = locale;
+             * exports.default = _default;
+             */
+            while (ts.isIdentifier(variableObj[exportDefaultName]?.node)) {
+                exportDefaultName = variableObj[exportDefaultName].node.getText(file);
+                result = { [exportDefaultName]: variableObj[exportDefaultName] };
+            }
+
+            Object.assign(exportObj, result);
         }
     }
 
-    // import A from B
-    // export default A
+    /**
+     * import a from 'B';
+     * export default a
+     */
     if (importObj[exportDefaultName]) {
-        const thirdPackage = (importReflect as any).thirdPackage[exportDefaultName];
-        let realPath;
-        if (thirdPackage) {
-            realPath = path.resolve(importReflect.basePath, 'node_modules', importObj[exportDefaultName] + thirdPackage.extension);
-        } else {
-            realPath = path.resolve(file.fileName, '../', importObj[exportDefaultName] + importReflect.extension);
-        }
-        const sourceFile = ts.createSourceFile(realPath, fs.readFileSync(realPath).toString(), ts.ScriptTarget.ES2019);
-        const newObjText: string = getExportDefaultRecursively(sourceFile);
-        exportStart = exportObj[exportDefaultName].pos;
-        exportEnd = exportObj[exportDefaultName].end;
+        const { node } = exportObj[exportDefaultName];
+        exportStart = node.pos;
+        exportEnd = node.end;
+        visitModule(exportDefaultName, node, file, importObj, replaceInputs);
 
-        replaceInputs.push({
-            pos: exportStart,
-            end: exportEnd,
-            replacementText: newObjText
-        });
+        /**
+         * const A = {
+         *   ...
+         * };
+         * or
+         * const A = 'a';
+         *
+         * export default A
+         */
     } else if (variableObj[exportDefaultName]) {
-        const { pos, end, initializer } = variableObj[exportDefaultName];
-        exportStart = pos;
-        exportEnd = end;
-        if (initializer.properties) {
-            for (const property of initializer.properties) {
-                findNestedProperty(property);
-            }
-        }
+        const { node } = variableObj[exportDefaultName];
+        exportStart = node.pos;
+        exportEnd = node.end;
+        visitObjectProperty(node);
     }
 
     return {
@@ -224,64 +208,155 @@ function getExportDefaultText(file: ts.SourceFile): any {
         replaceInputs
     };
 
-    function findNestedProperty(property: any) {
-        if (property?.initializer?.properties) {
-            for (const p of property.initializer.properties) {
-                findNestedProperty(p);
-            }
-            return;
-        }
+    /**
+     * visit a node, which can be
+     * - Key with ObjectLiteralExpression
+     * ```
+     * ->a: {
+     *   b: any
+     * }<-
+     * ```
+     *
+     * - ObjectLiteralExpression:
+     * ```
+     * a: ->{
+     *   b: any
+     * }<-
+     * ```
+     * - SpreadAssignment:
+     * ```
+     * a: {
+     *    ->...b<-
+     * }
+     * ```
+     *
+     * - ShorthandPropertyAssignment:
+     * ```
+     * a: {
+     *   ->b<-
+     * }
+     * ```
+     *
+     * - PropertyAssignment:
+     * ```
+     * a: {
+     *  ->b: any<-
+     * }
+     * ```
+     * @param node
+     */
+    function visitObjectProperty(node: ts.Node) {
         let initialText = '';
-        if (property.kind === ts.SyntaxKind.SpreadAssignment) {
-            // @ts-ignore
-            initialText = (property as ts.SpreadAssignment).expression.text;
-        } else if (property.kind === ts.SyntaxKind.ShorthandPropertyAssignment) {
-            initialText = (property.name as ts.Identifier)!.text;
-        } else if (property.kind === ts.SyntaxKind.PropertyAssignment) {
-            initialText = (property.initializer as ts.Identifier)!.text;
+        const initializer = (node as ts.VariableDeclaration)?.initializer;
+        if (initializer && ts.isObjectLiteralExpression(initializer!)) {
+            initializer.properties.forEach(p => visitObjectProperty(p));
+            return;
+        } else if (ts.isObjectLiteralExpression(node)) {
+            node.properties.forEach(p => visitObjectProperty(p));
+            return;
+        } else if (ts.isSpreadAssignment(node)) {
+            initialText = (node as ts.SpreadAssignment).expression.getText(file);
+        } else if (ts.isShorthandPropertyAssignment(node)) {
+            initialText = (node.name as ts.Identifier).text;
+        } else if (ts.isPropertyAssignment(node)) {
+            initialText = (node.initializer as ts.Identifier).text;
+        } else {
+            initialText = node.getText(file);
         }
-        if (importObj[initialText]) {
-            const thirdPackage = (importReflect as any).thirdPackage[initialText];
-            let realPath;
-            if (thirdPackage) {
-                realPath = path.resolve(importReflect.basePath, 'node_modules', importObj[initialText] + thirdPackage.extension);
-            } else {
-                realPath = path.resolve(file.fileName, '../', importObj[initialText] + importReflect.extension);
-            }
-            const sourceFile = ts.createSourceFile(realPath, fs.readFileSync(realPath).toString(), ts.ScriptTarget.ES2019);
-            const newObjText: string = getExportDefaultRecursively(sourceFile);
 
-            replaceInputs.push({
-                pos: property.pos,
-                end: property.end,
-                replacementText:
-                    property.kind === ts.SyntaxKind.SpreadAssignment
-                        ? newObjText.replace(/^[^{]*{|,[^,]*}[^}]*$/g, '')
-                        : `${initialText}:${newObjText}`
-            });
+        if (importObj[initialText]) {
+            visitModule(initialText, node, file, importObj, replaceInputs);
         } else if (variableObj[initialText]) {
+            const newNode = variableObj[initialText].node;
+            if (ts.isObjectLiteralExpression(newNode)) {
+                visitObjectProperty(newNode);
+            }
             replaceInputs.push({
-                pos: property.pos,
-                end: property.end,
-                replacementText: `${property.name.text}: '${variableObj[initialText].initializer.text}'`
+                pos: node.pos,
+                end: node.end,
+                replacementText: `${(node as ts.PropertyAssignment).name.getText(file)}: ${newNode.getText(file)}`
             });
         }
     }
 }
 
-function getNewExportText(
+/**
+ *
+ * @param sourceFile
+ *
+ * a complete module file content is
+ * ```
+ * export default NAME
+ * ```
+ * but we only want "NAME", so we need the export value position information.
+ *
+ * @param exportValueStart
+ * @param exportValueEnd
+ * @param replacements
+ */
+function getReplacedExportText(
     sourceFile: ts.SourceFile,
-    exportInitializerStart: number,
-    exportInitializerEnd: number,
+    exportValueStart: number,
+    exportValueEnd: number,
     replacements: Replacement[]
 ): string {
     const fileText = sourceFile.getFullText();
-    let newExportDefaultText = fileText.substring(exportInitializerStart, exportInitializerEnd);
+    let newExportDefaultText = fileText.substring(exportValueStart, exportValueEnd);
     for (const { pos, end, replacementText } of replacements.reverse()) {
         newExportDefaultText =
-            newExportDefaultText.slice(0, pos - exportInitializerStart) +
-            replacementText +
-            newExportDefaultText.slice(end - exportInitializerStart);
+            newExportDefaultText.slice(0, pos - exportValueStart) + replacementText + newExportDefaultText.slice(end - exportValueStart);
     }
     return newExportDefaultText;
+}
+
+/**
+ * if expression is "exports.default = xxx"
+ * @param expression
+ */
+function getExportsDefaultExpression(expression: ts.Expression): ts.Node | null {
+    const left = (expression as ts.BinaryExpression).left as ts.PropertyAccessExpression;
+    const right = (expression as ts.BinaryExpression).right as ts.Identifier;
+    if ((left?.expression as ts.Identifier)?.text === 'exports' && left.name.text === 'default' && !!right.text) {
+        return right;
+    }
+    return null;
+}
+
+/**
+ * when come a module text
+ * ```
+ * import A from '->a<-'
+ *
+ * const b = A;
+ * ```
+ * @param name: module name
+ * @param node: the node which referred module
+ * @param sourceFile
+ * @param importInfo: all the imports stored before
+ * @param replaceInputs
+ */
+function visitModule(name: string, node: ts.Node, sourceFile: ts.SourceFile, importInfo: ImportInfo, replaceInputs: Replacement[]): void {
+    const thirdPackage = (importReflect as any).thirdPackage[name];
+    let realPath, replacementText;
+    if (thirdPackage) {
+        realPath = path.resolve(importReflect.basePath, 'node_modules', importInfo[name] + thirdPackage.extension);
+    } else {
+        realPath = path.resolve(sourceFile.fileName, '../', importInfo[name] + importReflect.extension);
+    }
+    const file = ts.createSourceFile(realPath, fs.readFileSync(realPath).toString(), ts.ScriptTarget.ES2019);
+    const moduleText: string = getFileExportDefaultText(file);
+
+    if (ts.isSpreadAssignment(node)) {
+        // replace first "{" and last "," "}" to null
+        replacementText = moduleText.replace(/^[^{]*{|,[^,]*}[^}]*$/g, '');
+    } else if (ts.isShorthandPropertyAssignment(node)) {
+        replacementText = `${name}:${moduleText}`;
+    } else {
+        replacementText = moduleText;
+    }
+    replaceInputs.push({
+        pos: node.pos,
+        end: node.end,
+        replacementText
+    });
 }

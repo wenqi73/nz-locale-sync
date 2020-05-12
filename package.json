@@ -1,10 +1,10 @@
 {
   "name": "nz-locale-sync",
   "version": "0.1.0",
-  "description": "",
+  "description": "Synchronize the locale files from [ant-design locale directory](https://github.com/ant-design/ant-design/tree/master/components/locale)",
   "main": "index.ts",
   "dependencies": {
-    "typescript": "^3.8.3",
+    "typescript": "^3.8.3"
   },
   "devDependencies": {
     "@types/node": "^13.13.5",
@@ -12,7 +12,7 @@
     "ts-node": "^8.10.1"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "ts-node index.ts"
   },
   "author": "",
   "license": "MIT"

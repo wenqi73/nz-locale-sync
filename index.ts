@@ -1,59 +1,38 @@
 // https://github.com/Microsoft/TypeScript/issues/7580#issuecomment-198552002
 
-const importReflect = {
-    // ant-design path
-    basePath: `${__dirname}/../ant-design/`,
-
-    // ant-design i18n path
-    localePath: 'components/locale/',
-
-    // ant-design i18n file extension
-    extension: '.tsx',
-
-    /**
-     * third package, such as following line
-     * in ant-design/components/locale/default.tsx
-     * `import Pagination from 'rc-pagination/lib/locale`/en_US';
-     */
-    thirdPackage: {
-        Pagination: {
-            extension: '.js'
-        },
-        CalendarLocale: {
-            extension: '.js'
-        }
-    },
-
-    // target path
-    dest: {
-        path: `${__dirname}/../ng-zorro-antd/components/i18n/languages`,
-        extension: '.ts'
-    }
-};
-
+import { config } from './config';
 import * as ts from 'typescript';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as logger from './logger';
+import { execSync } from 'child_process';
 
-interface Replacement {
-    pos: number;
-    end: number;
-    replacementText: string;
-}
+// Start!
+const antDesignName = 'ant-design';
+const thirdPackages: string[] = Object.keys(config.thirdPackage).map(p => (config.thirdPackage as any)[p].name);
+main();
 
-interface VariableInfo {
-    [key: string]: { node: ts.Node };
-}
+export function main() {
+    try {
+        const packageJsonPath = path.join(antDesignName, 'package.json');
+        const packageJson = JSON.parse(fs.readFileSync(packageJsonPath).toString());
 
-interface ImportInfo {
-    [key: string]: string;
-}
+        if (packageJson.version !== config.tag) {
+            logger.warning(`Not found matched ${antDesignName}!`);
+            throw Error();
+        }
 
-function main() {
-    const files = fs
-        .readdirSync(importReflect.basePath + importReflect.localePath)
-        .map(file => path.resolve(importReflect.basePath, importReflect.localePath, file));
-    // const files = [path.resolve(importReflect.basePath, importReflect.localePath, 'hy_AM.tsx')];
+        if (isThirdPackageInstalled(thirdPackages)) {
+            logger.warning(`Not found third packages in ${antDesignName}!`);
+            throw Error();
+        }
+    } catch (e) {
+        installAntd();
+    }
+
+    const localeDir = path.resolve(antDesignName, config.localePath);
+    const files = fs.readdirSync(localeDir).map(file => path.resolve(localeDir, file));
+    // const files = [path.resolve(antDesignName, config.localePath, 'en_US.tsx')];
 
     const program = ts.createProgram({
         rootNames: files,
@@ -66,19 +45,30 @@ function main() {
     for (const file of program.getSourceFiles()) {
         if (!file.isDeclarationFile) {
             const newText = getFileExportDefaultText(file);
-            const destPath = path.resolve(
-                importReflect.dest.path,
-                path.basename(file.fileName, importReflect.extension) + importReflect.dest.extension
-            );
+            const destPath = path.resolve(config.dest.path, path.basename(file.fileName, config.extension) + config.dest.extension);
 
             const jsonText = 'export default ' + JSON.stringify(eval('(' + newText + ')'), null, 2);
             fs.writeFileSync(destPath, jsonText);
-            console.log('\x1b[32m%s\x1b[0m', `Generate ${destPath}`); //cyan
+            logger.success(`Generate ${destPath}`);
         }
     }
 }
 
-main();
+function isThirdPackageInstalled(packages: string[]) {
+    return packages.length > 0 && packages.every(p => fs.readdirSync(path.resolve(antDesignName, 'node_modules', p)).length > 0);
+}
+
+function installAntd() {
+    logger.info(`Deleting ${antDesignName}.`);
+    execSync(`rm -rf ${antDesignName}`);
+
+    logger.info(`Downloading ${antDesignName} ${config.tag} version...`);
+    execSync(`git clone https://github.com/ant-design/ant-design.git --branch ${config.tag} --depth=1
+ `);
+
+    logger.info(`Installing ${thirdPackages}...`);
+    execSync(`cd ${antDesignName} && npm install ${thirdPackages.join(' ')}`);
+}
 
 function getFileExportDefaultText(file: ts.SourceFile): string {
     const replacementObj = getExportDefaultText(file);
@@ -336,19 +326,19 @@ function getExportsDefaultExpression(expression: ts.Expression): ts.Node | null 
  * @param replaceInputs
  */
 function visitModule(name: string, node: ts.Node, sourceFile: ts.SourceFile, importInfo: ImportInfo, replaceInputs: Replacement[]): void {
-    const thirdPackage = (importReflect as any).thirdPackage[name];
+    const thirdPackage = (config as any).thirdPackage[name];
     let realPath, replacementText;
     if (thirdPackage) {
-        realPath = path.resolve(importReflect.basePath, 'node_modules', importInfo[name] + thirdPackage.extension);
+        realPath = path.resolve(antDesignName, 'node_modules', importInfo[name] + thirdPackage.extension);
     } else {
-        realPath = path.resolve(sourceFile.fileName, '../', importInfo[name] + importReflect.extension);
+        realPath = path.resolve(sourceFile.fileName, '../', importInfo[name] + config.extension);
     }
     const file = ts.createSourceFile(realPath, fs.readFileSync(realPath).toString(), ts.ScriptTarget.ES2019);
     const moduleText: string = getFileExportDefaultText(file);
 
     if (ts.isSpreadAssignment(node)) {
         // replace first "{" and last "," "}" to null
-        replacementText = moduleText.replace(/^[^{]*{|,[^,]*}[^}]*$/g, '');
+        replacementText = moduleText.replace(/^[^{]*{|(,\s)*}[^}]*$/g, '');
     } else if (ts.isShorthandPropertyAssignment(node)) {
         replacementText = `${name}:${moduleText}`;
     } else {
@@ -359,4 +349,18 @@ function visitModule(name: string, node: ts.Node, sourceFile: ts.SourceFile, imp
         end: node.end,
         replacementText
     });
+}
+
+interface Replacement {
+    pos: number;
+    end: number;
+    replacementText: string;
+}
+
+interface VariableInfo {
+    [key: string]: { node: ts.Node };
+}
+
+interface ImportInfo {
+    [key: string]: string;
 }

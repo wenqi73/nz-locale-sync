@@ -10,7 +10,7 @@ export const config = {
     /**
      * third package, such as following line
      * in ant-design/components/locale/default.tsx
-     * `import Pagination from 'rc-pagination/lib/locale`/en_US';
+     * `import Pagination from 'rc-pagination/lib/locale/en_US'`;
      */
     thirdPackage: {
         Pagination: {

@@ -6,6 +6,9 @@ package-lock.json
 yarn.lock
 ant-design
 
+# Build
+dist/
+
 # IDEs and editors
 .idea/
 .project

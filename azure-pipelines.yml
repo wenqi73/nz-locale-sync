@@ -26,7 +26,7 @@ steps:
       displayName: 'Package package'
     - task: CopyFiles@2
       inputs:
-          contents: '*.tgz'
+          contents: 'dist/*.tgz'
           targetFolder: $(Build.ArtifactStagingDirectory)
       displayName: 'Copy archives to artifacts staging directory'
 

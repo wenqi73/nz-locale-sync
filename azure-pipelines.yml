@@ -4,7 +4,7 @@
 # https://docs.microsoft.com/azure/devops/pipelines/languages/javascript
 
 pr:
-  - releases/*
+  - release/*
 
 pool:
     vmImage: 'ubuntu-latest'
@@ -26,8 +26,10 @@ steps:
       displayName: 'Package package'
     - task: CopyFiles@2
       inputs:
-          contents: '*.tgz'
-          targetFolder: $(Build.ArtifactStagingDirectory)
+        contents: |
+          dist/*.tgz
+          publish.sh
+        targetFolder: $(Build.ArtifactStagingDirectory)
       displayName: 'Copy archives to artifacts staging directory'
 
     - task: PublishBuildArtifacts@1

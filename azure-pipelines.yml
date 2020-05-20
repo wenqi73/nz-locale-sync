@@ -43,8 +43,8 @@ stages:
           - task: PublishBuildArtifacts@1
             inputs:
               path: $(Build.ArtifactStagingDirectory)
-              artifact: publish
+#              artifact: publish
             displayName: 'Publish artifacts'
 
         dependsOn: build_site
-        condition: and(succeeded(), startsWith(variables['Build.SourceBranch'], 'refs/heads/release/'))
+        condition: and(succeeded(), startsWith(variables['System.PullRequest.SourceBranch'], 'release/'))

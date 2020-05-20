@@ -31,20 +31,20 @@ stages:
               export
               npm run build
 
-      - job: upload_package
-        steps:
+#      - job: upload_package
+#        steps:
           - task: CopyFiles@2
             inputs:
               contents: |
-                dist
+                dist/**
               targetFolder: $(Build.ArtifactStagingDirectory)
             displayName: 'Copy archives to artifacts staging directory'
+            condition: and(succeeded(), startsWith(variables['System.PullRequest.SourceBranch'], 'release/'))
 
           - task: PublishBuildArtifacts@1
             inputs:
               path: $(Build.ArtifactStagingDirectory)
 #              artifact: publish
             displayName: 'Publish artifacts'
+            condition: and(succeeded(), startsWith(variables['System.PullRequest.SourceBranch'], 'release/'))
 
-        dependsOn: build_site
-        condition: and(succeeded(), startsWith(variables['System.PullRequest.SourceBranch'], 'release/'))

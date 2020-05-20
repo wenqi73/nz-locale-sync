@@ -30,13 +30,12 @@ stages:
           - script: |
               export
               npm run build
-
+              tar czvf build.tgz dist publish.sh
 #      - job: upload_package
 #        steps:
           - task: CopyFiles@2
             inputs:
-              contents: |
-                dist/**
+              contents: build.tgz
               targetFolder: $(Build.ArtifactStagingDirectory)
             displayName: 'Copy archives to artifacts staging directory'
             condition: and(succeeded(), startsWith(variables['System.PullRequest.SourceBranch'], 'release/'))
@@ -44,7 +43,6 @@ stages:
           - task: PublishBuildArtifacts@1
             inputs:
               path: $(Build.ArtifactStagingDirectory)
-#              artifact: publish
             displayName: 'Publish artifacts'
             condition: and(succeeded(), startsWith(variables['System.PullRequest.SourceBranch'], 'release/'))
 

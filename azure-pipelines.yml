@@ -2,10 +2,9 @@
 # Build a Node.js project that uses Angular.
 # Add steps that analyze code, save build artifacts, deploy, and more:
 # https://docs.microsoft.com/azure/devops/pipelines/languages/javascript
-trigger:
-    - release/*
 
-pr: none
+pr:
+  - release/*
 
 pool:
     vmImage: 'ubuntu-latest'
@@ -13,7 +12,7 @@ pool:
 steps:
     - task: NodeTool@0
       inputs:
-          versionSpec: '10.x'
+          versionSpec: '12.x'
       displayName: 'Install Node.js'
 
     - script: |
@@ -23,11 +22,14 @@ steps:
           npm run build
           cd dist
           npm pack
+          export
       displayName: 'Package package'
     - task: CopyFiles@2
       inputs:
-          contents: '*.tgz'
-          targetFolder: $(Build.ArtifactStagingDirectory)
+        contents: |
+          dist/*.tgz
+          publish.sh
+        targetFolder: $(Build.ArtifactStagingDirectory)
       displayName: 'Copy archives to artifacts staging directory'
 
     - task: PublishBuildArtifacts@1

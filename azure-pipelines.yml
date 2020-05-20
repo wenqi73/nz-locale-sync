@@ -3,37 +3,46 @@
 # Add steps that analyze code, save build artifacts, deploy, and more:
 # https://docs.microsoft.com/azure/devops/pipelines/languages/javascript
 
-pr:
-  - release/*
+trigger:
+  - master
 
 pool:
-    vmImage: 'ubuntu-latest'
+  vmImage: 'ubuntu-latest'
 
-steps:
-    - task: NodeTool@0
-      inputs:
-          versionSpec: '12.x'
-      displayName: 'Install Node.js'
 
-    - script: |
-          npm install
-      displayName: 'Install dependencies'
-    - script: |
-          npm run build
-          cd dist
-          npm pack
-          export
-      displayName: 'Package package'
-    - task: CopyFiles@2
-      inputs:
-        contents: |
-          dist/*.tgz
-          publish.sh
-        targetFolder: $(Build.ArtifactStagingDirectory)
-      displayName: 'Copy archives to artifacts staging directory'
+stages:
+  - stage: env
+    jobs:
+      - job: Nodes
+        steps:
+          - task: NodeTool@0
+            inputs:
+              versionSpec: '12.13.1'
+            displayName: 'Install Node.js'
 
-    - task: PublishBuildArtifacts@1
-      inputs:
-          path: $(Build.ArtifactStagingDirectory)
-          artifact: package
-      displayName: 'Publish artifacts'
+  - stage: build
+    jobs:
+      - job: build_site
+        steps:
+          - task: Npm@1
+            inputs:
+              command: 'install'
+          - script: |
+              export
+              npm run build
+              tar czvf build.tgz dist publish.sh
+#      - job: upload_package
+#        steps:
+          - task: CopyFiles@2
+            inputs:
+              contents: build.tgz
+              targetFolder: $(Build.ArtifactStagingDirectory)
+            displayName: 'Copy archives to artifacts staging directory'
+            condition: and(succeeded(), startsWith(variables['System.PullRequest.SourceBranch'], 'release/'))
+
+          - task: PublishBuildArtifacts@1
+            inputs:
+              path: $(Build.ArtifactStagingDirectory)
+            displayName: 'Publish artifacts'
+            condition: and(succeeded(), startsWith(variables['System.PullRequest.SourceBranch'], 'release/'))
+

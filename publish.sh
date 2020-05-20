@@ -1,5 +1,8 @@
 echo '[Action] git push to another repo'
 ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+echo $(npm-token)
+echo $(git-token)
+
 site_name=nz-locale-sync-release
 git config --global core.longpaths true
 git config --global user.name "wenqi73"

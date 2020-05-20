@@ -43,6 +43,7 @@ stages:
           - task: PublishBuildArtifacts@1
             inputs:
               path: $(Build.ArtifactStagingDirectory)
+              artifact: publish
             displayName: 'Publish artifacts'
 
         dependsOn: build_site

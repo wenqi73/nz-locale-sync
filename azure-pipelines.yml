@@ -38,11 +38,11 @@ stages:
               contents: build.tgz
               targetFolder: $(Build.ArtifactStagingDirectory)
             displayName: 'Copy archives to artifacts staging directory'
-            condition: and(succeeded(), startsWith(variables['System.PullRequest.SourceBranch'], 'release/'))
+#            condition: and(succeeded(), startsWith(variables['System.PullRequest.SourceBranch'], 'release/'))
 
           - task: PublishBuildArtifacts@1
             inputs:
               path: $(Build.ArtifactStagingDirectory)
             displayName: 'Publish artifacts'
-            condition: and(succeeded(), startsWith(variables['System.PullRequest.SourceBranch'], 'release/'))
+#            condition: and(succeeded(), startsWith(variables['System.PullRequest.SourceBranch'], 'release/'))
 

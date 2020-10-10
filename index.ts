@@ -32,7 +32,9 @@ export function main() {
 
     const localeDir = path.resolve(antDesignName, config.localePath);
     const files = fs.readdirSync(localeDir).map(file => path.resolve(localeDir, file));
-    // const files = [path.resolve(antDesignName, config.localePath, 'en_US.tsx')];
+
+    // for debug
+    // const files = [path.resolve(antDesignName, config.localePath, 'gl_ES.tsx')];
 
     const program = ts.createProgram({
         rootNames: files,
@@ -46,7 +48,6 @@ export function main() {
         if (!file.isDeclarationFile) {
             const newText = getFileExportDefaultText(file);
             const destPath = path.resolve(config.dest.path, path.basename(file.fileName, config.extension) + config.dest.extension);
-
             const jsonText = 'export default ' + JSON.stringify(eval('(' + newText + ')'), null, 2);
             fs.writeFileSync(destPath, jsonText);
             logger.success(`Generate ${destPath}`);
@@ -144,6 +145,20 @@ function getExportDefaultText(file: ts.SourceFile): any {
         // export default a
         if (ts.isExpressionStatement(statement) && getExportsDefaultExpression(statement.expression)) {
             const exportDefaultExpression = getExportsDefaultExpression(statement.expression);
+
+            /**
+             * export default = { ... }
+             */
+            if (ts.isObjectLiteralExpression(exportDefaultExpression!)) {
+                exportStart = exportDefaultExpression!.pos;
+                exportEnd = exportDefaultExpression!.end;
+                return {
+                    exportStart,
+                    exportEnd,
+                    replaceInputs
+                };
+            }
+
             exportDefaultName = exportDefaultExpression!.getText(file);
             let result = {
                 [exportDefaultName]: {
@@ -157,7 +172,7 @@ function getExportDefaultText(file: ts.SourceFile): any {
              * var _default = locale;
              * exports.default = _default;
              */
-            while (ts.isIdentifier(variableObj[exportDefaultName]?.node)) {
+            while (variableObj[exportDefaultName] && ts.isIdentifier(variableObj[exportDefaultName]?.node)) {
                 exportDefaultName = variableObj[exportDefaultName].node.getText(file);
                 result = { [exportDefaultName]: variableObj[exportDefaultName] };
             }
@@ -306,7 +321,7 @@ function getReplacedExportText(
 function getExportsDefaultExpression(expression: ts.Expression): ts.Node | null {
     const left = (expression as ts.BinaryExpression).left as ts.PropertyAccessExpression;
     const right = (expression as ts.BinaryExpression).right as ts.Identifier;
-    if ((left?.expression as ts.Identifier)?.text === 'exports' && left.name.text === 'default' && !!right.text) {
+    if ((left?.expression as ts.Identifier)?.text === 'exports' && left.name.text === 'default') {
         return right;
     }
     return null;

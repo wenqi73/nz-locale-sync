@@ -22,7 +22,7 @@ export function main() {
             throw Error();
         }
 
-        if (isThirdPackageInstalled(thirdPackages)) {
+        if (!isThirdPackageInstalled(thirdPackages)) {
             logger.warning(`Not found third packages in ${antDesignName}!`);
             throw Error();
         }
@@ -48,7 +48,11 @@ export function main() {
         if (!file.isDeclarationFile) {
             const newText = getFileExportDefaultText(file);
             const destPath = path.resolve(config.dest.path, path.basename(file.fileName, config.extension) + config.dest.extension);
-            const jsonText = 'export default ' + JSON.stringify(eval('(' + newText + ')'), null, 2);
+            const json = eval(`(${newText})`);
+
+            // delete form property
+            delete json.Form;
+            const jsonText = 'export default ' + JSON.stringify(json, null, 2);
             fs.writeFileSync(destPath, jsonText);
             logger.success(`Generate ${destPath}`);
         }

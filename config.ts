@@ -2,7 +2,7 @@ export const config = {
     // ant-design i18n path
     localePath: 'components/locale/',
 
-    tag: '4.6.6',
+    tag: '4.7.0',
 
     // ant-design i18n file extension
     extension: '.tsx',

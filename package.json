@@ -5,9 +5,11 @@
   "main": "util.ts",
   "dependencies": {
     "antd": "^4.2.2",
+    "lodash": "^4.17.21",
     "typescript": "^3.8.3"
   },
   "devDependencies": {
+    "@types/lodash": "^4.14.178",
     "@types/node": "^13.13.5",
     "prettier": "^2.0.5",
     "ts-node": "^8.10.1"

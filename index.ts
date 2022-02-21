@@ -6,6 +6,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as logger from './logger';
 import { execSync } from 'child_process';
+import _ from 'lodash';
 
 // Start!
 const antDesignName = 'ant-design';
@@ -48,7 +49,8 @@ export function main() {
         if (!file.isDeclarationFile) {
             const newText = getFileExportDefaultText(file);
             const destPath = path.resolve(config.dest.path, path.basename(file.fileName, config.extension) + config.dest.extension);
-            const json = eval(`(${newText})`);
+            const oldJson = fs.existsSync(destPath) ? require(destPath).default : {};
+            const json = _.merge(oldJson, eval(`(${newText})`));
 
             // delete form property
             delete json.Form;
